@@ -1,0 +1,10 @@
+{
+  "bookstore": {
+    "book": {
+      "category": "fiction",
+      "title": "The Hobbit",
+      "author": "J.R.R. Tolkien",
+      "price": 14.99
+    }
+  }
+}
