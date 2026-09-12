@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Chain Game</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Poppins:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Poppins', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#6366f1',
+                        secondary: '#ec4899',
+                        darkBg: '#0f172a',
+                        darkCard: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            transition: background-color 0.3s, color 0.3s;
+            overflow-x: hidden;
+        }
+        
+        .screen {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+        }
+        
+        .screen.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .word-bubble {
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            opacity: 0;
+            transform: scale(0.8);
+        }
+
+        @keyframes popIn {
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 50;
+            pointer-events: none;
+        }
+        
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .pulse-text {
+            animation: pulse-color 2s infinite;
+        }
+
+        @keyframes pulse-color {
+            0%, 100% { color: #6366f1; }
+            50% { color: #ec4899; }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-darkBg dark:text-gray-100 min-h-screen flex flex-col font-sans antialiased selection:bg-primary selection:text-white">
+
+    <div id="toast" class="toast bg-red-500 text-white px-6 py-3 rounded-full shadow-lg font-semibold flex items-center gap-2">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="toast-message">Error</span>
+    </div>
+
+    <main class="flex-grow flex items-center justify-center p-4 w-full max-w-4xl mx-auto relative">
+        
+        <div id="screen-start" class="screen active flex-col items-center text-center w-full max-w-md bg-white dark:bg-darkCard p-8 rounded-3xl shadow-2xl">
+            <div class="mb-8">
+                <i class="fas fa-link text-5xl text-primary mb-4"></i>
+                <h1 class="font-display text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary mb-2">WORD CHAIN</h1>
+                <p class="text-gray-500 dark:text-gray-400 font-medium">How long can you keep the chain alive?</p>
+            </div>
+            
+            <div class="flex flex-col gap-4 w-full">
+                <button onclick="ui.showScreen('screen-setup')" class="bg-primary hover:bg-indigo-600 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-indigo-500/30 transform hover:-translate-y-1 flex justify-center items-center gap-2 text-lg">
+                    <i class="fas fa-play"></i> PLAY NOW
+                </button>
+                <button onclick="ui.showScreen('screen-settings')" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 px-6 rounded-xl transition-all flex justify-center items-center gap-2">
+                    <i class="fas fa-cog"></i> SETTINGS
+                </button>
+                <button onclick="ui.showScreen('screen-howto')" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 px-6 rounded-xl transition-all flex justify-center items-center gap-2">
+                    <i class="fas fa-question-circle"></i> HOW TO PLAY
+                </button>
+            </div>
+        </div>
+
+        <div id="screen-setup" class="screen flex-col items-center w-full max-w-md bg-white dark:bg-darkCard p-8 rounded-3xl shadow-2xl">
+            <button onclick="ui.showScreen('screen-start')" class="self-start text-gray-500 hover:text-primary mb-6 transition-colors">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </button>
+            <h2 class="font-display text-3xl font-bold mb-6 text-center w-full">Game Setup</h2>
+            
+            <div class="w-full space-y-6">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Game Mode</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button id="mode-pvc" onclick="settings.setMode('pvc')" class="setup-btn border-2 border-primary bg-indigo-50 dark:bg-indigo-900/20 text-primary py-3 rounded-xl font-semibold transition-all">
+                            <i class="fas fa-robot block text-xl mb-1"></i> Vs Computer
+                        </button>
+                        <button id="mode-pvp" onclick="settings.setMode('pvp')" class="setup-btn border-2 border-transparent bg-gray-100 dark:bg-gray-800 text-gray-500 py-3 rounded-xl font-semibold transition-all hover:bg-gray-200 dark:hover:bg-gray-700">
+                            <i class="fas fa-user-friends block text-xl mb-1"></i> 2 Player
+                        </button>
+                    </div>
+                </div>
+
+                <div id="difficulty-section">
+                    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">AI Difficulty</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="diff-easy" onclick="settings.setDifficulty('easy')" class="diff-btn border-2 border-transparent bg-gray-100 dark:bg-gray-800 text-gray-500 py-2 rounded-lg font-semibold transition-all hover:bg-gray-200 dark:hover:bg-gray-700">Easy</button>
+                        <button id="diff-medium" onclick="settings.setDifficulty('medium')" class="diff-btn border-2 border-primary bg-indigo-50 dark:bg-indigo-900/20 text-primary py-2 rounded-lg font-semibold transition-all">Medium</button>
+                        <button id="diff-hard" onclick="settings.setDifficulty('hard')" class="diff-btn border-2 border-transparent bg-gray-100 dark:bg-gray-800 text-gray-500 py-2 rounded-lg font-semibold transition-all hover:bg-gray-200 dark:hover:bg-gray-700">Hard</button>
+                    </div>
+                </div>
+                
+                <button onclick="game.start()" class="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg mt-4 transition-all transform hover:-translate-y-1 text-lg">
+                    START GAME
+                </button>
+            </div>
+        </div>
+
+        <div id="screen-settings" class="screen flex-col items-center w-full max-w-md bg-white dark:bg-darkCard p-8 rounded-3xl shadow-2xl">
+            <button onclick="ui.showScreen('screen-start')" class="self-start text-gray-500 hover:text-primary mb-6 transition-colors">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </button>
+            <h2 class="font-display text-3xl font-bold mb-6 text-center w-full">Settings</h2>
+            
+            <div class="w-full space-y-6">
+                <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                    <div>
+                        <h3 class="font-bold">Dark Theme</h3>
+                        <p class="text-xs text-gray-500">Toggle visual appearance</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-theme" class="sr-only peer" onchange="settings.toggleTheme()">
+                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
+                
+                <div class="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                    <div>
+                        <h3 class="font-bold">Sound Effects</h3>
+                        <p class="text-xs text-gray-500">Game audio</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-sound" class="sr-only peer" checked onchange="settings.toggleSound()">
+                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Timer Duration</label>
+                    <select id="timer-select" onchange="settings.setTimer(this.value)" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5 dark:bg-gray-800 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white outline-none">
+                        <option value="10">10 Seconds (Fast)</option>
+                        <option value="15" selected>15 Seconds (Normal)</option>
+                        <option value="30">30 Seconds (Relaxed)</option>
+                        <option value="0">No Timer</option>
+                    </select>
+                </div>
+                
+                <button onclick="settings.resetBestScore()" class="w-full border border-red-500 text-red-500 hover:bg-red-500 hover:text-white font-bold py-3 rounded-xl transition-all">
+                    Reset Best Score
+                </button>
+            </div>
+        </div>
+
+        <div id="screen-howto" class="screen flex-col items-center w-full max-w-md bg-white dark:bg-darkCard p-8 rounded-3xl shadow-2xl">
+            <button onclick="ui.showScreen('screen-start')" class="self-start text-gray-500 hover:text-primary mb-6 transition-colors">
+                <i class="fas fa-arrow-left text-xl"></i>
+            </button>
+            <h2 class="font-display text-3xl font-bold mb-4 text-center w-full">How to Play</h2>
+            
+            <div class="space-y-4 text-left w-full text-gray-700 dark:text-gray-300">
+                <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                    <p class="font-bold mb-1 text-primary"><i class="fas fa-check-circle mr-2"></i> The Rule</p>
+                    <p class="text-sm">Type a word that begins with the <strong>last letter</strong> of the previous word.</p>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                    <p class="font-bold mb-1 text-primary"><i class="fas fa-ban mr-2"></i> Restrictions</p>
+                    <ul class="text-sm list-disc pl-5">
+                        <li>Words must be valid English words.</li>
+                        <li>No proper nouns (usually).</li>
+                        <li>You cannot reuse a word that has already been played in the current game.</li>
+                    </ul>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl">
+                    <p class="font-bold mb-1 text-primary"><i class="fas fa-star mr-2"></i> Scoring</p>
+                    <ul class="text-sm list-disc pl-5">
+                        <li>Longer words give more points!</li>
+                        <li>Maintain a streak to earn bonus points.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="screen-game" class="screen flex-col w-full max-w-2xl bg-white dark:bg-darkCard rounded-3xl shadow-2xl overflow-hidden h-[90vh] md:h-[80vh]">
+            
+            <!-- Game Header -->
+            <div class="bg-gray-50 dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shadow-sm z-10">
+                <div class="flex flex-col">
+                    <span class="text-xs font-bold text-gray-500 uppercase">Score</span>
+                    <span id="game-score" class="font-display text-2xl font-bold text-primary">0</span>
+                </div>
+                
+                <div id="timer-container" class="flex flex-col items-center">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Time</span>
+                    <div id="timer-display" class="font-display text-3xl font-black bg-gray-200 dark:bg-gray-700 px-4 py-1 rounded-full text-gray-800 dark:text-white transition-colors">
+                        15
+                    </div>
+                </div>
+
+                <div class="flex flex-col items-end">
+                    <span class="text-xs font-bold text-gray-500 uppercase">Best</span>
+                    <span id="game-best" class="font-display text-lg font-bold text-gray-700 dark:text-gray-300">0</span>
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="flex justify-between px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-xs font-semibold text-indigo-800 dark:text-indigo-200">
+                <span>Streak: <span id="game-streak">0</span></span>
+                <span id="turn-indicator"><i class="fas fa-user"></i> Player 1's Turn</span>
+                <span>Words: <span id="game-words">0</span></span>
+            </div>
+
+            <!-- Word History Area -->
+            <div id="word-history" class="flex-grow p-4 overflow-y-auto flex flex-col gap-3 scroll-smooth bg-gray-100/50 dark:bg-darkBg/50 relative">
+                <!-- Chat bubbles will go here -->
+                <div id="start-prompt" class="text-center text-gray-400 dark:text-gray-500 my-auto pb-10">
+                    <i class="fas fa-comment-dots text-4xl mb-3 opacity-50"></i>
+                    <p class="font-semibold">Type any word to start the chain!</p>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="p-4 bg-white dark:bg-darkCard border-t border-gray-200 dark:border-gray-700 z-10 relative">
+                
+                <!-- Required Letter Highlight -->
+                <div id="required-letter-box" class="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-darkCard px-6 py-2 rounded-t-xl border-t border-l border-r border-gray-200 dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] hidden items-center gap-2">
+                    <span class="text-xs font-bold text-gray-500 uppercase">Starts with</span>
+                    <span id="required-letter" class="font-display text-2xl font-black text-secondary">A</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <input type="text" id="word-input" class="flex-grow bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 text-lg font-semibold text-gray-900 dark:text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary uppercase transition-all" placeholder="Enter word..." autocomplete="off">
+                    <button id="submit-btn" onclick="game.handleSubmission()" class="bg-primary hover:bg-indigo-600 text-white rounded-xl px-6 py-3 font-bold transition-colors shadow-md flex items-center justify-center">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    <button onclick="game.confirmRestart()" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-white rounded-xl px-4 py-3 font-bold transition-colors">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-gameover" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+            <div class="bg-white dark:bg-darkCard rounded-3xl p-8 max-w-sm w-full mx-4 shadow-2xl text-center transform scale-95 transition-transform duration-300" id="gameover-box">
+                <i id="gameover-icon" class="fas fa-times-circle text-6xl text-red-500 mb-4"></i>
+                <h2 id="gameover-title" class="font-display text-3xl font-bold mb-2">Game Over</h2>
+                <p id="gameover-reason" class="text-gray-500 dark:text-gray-400 mb-6">Time ran out!</p>
+                
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-6">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="text-center">
+                            <span class="block text-xs font-bold text-gray-500 uppercase mb-1">Score</span>
+                            <span id="modal-score" class="text-2xl font-bold text-primary">0</span>
+                        </div>
+                        <div class="text-center">
+                            <span class="block text-xs font-bold text-gray-500 uppercase mb-1">Words</span>
+                            <span id="modal-words" class="text-2xl font-bold text-secondary">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="game.start()" class="flex-grow bg-primary hover:bg-indigo-600 text-white font-bold py-3 rounded-xl transition-colors">
+                        Play Again
+                    </button>
+                    <button onclick="ui.showScreen('screen-start'); ui.hideModal('modal-gameover');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-bold py-3 px-4 rounded-xl transition-colors">
+                        Menu
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- 1. DICTIONARY SETUP ---
+        // A substantial compressed list of common English words to make it playable without external API.
+        // In a production app, a Trie or external API might be used, but this serves the local requirement perfectly.
+        const compressedWords = {
+    "a": [
+        "able",
+        "about",
+        "above",
+        "abscess",
+        "according",
+        "account",
+        "across",
+        "act",
+        "action",
+        "activity",
+        "acute",
+        "added",
+        "adjutant",
+        "administration",
+        "affairs",
+        "affected",
+        "afraid",
+        "after",
+        "again",
+        "against",
+        "age",
+        "ah",
+        "air",
+        "alexander",
+        "all",
+        "almost",
+        "alone",
+        "along",
+        "alpatych",
+        "already",
+        "also",
+        "although",
+        "always",
+        "am",
+        "among",
+        "an",
+        "anatole",
+        "and",
+        "aneurysm",
+        "angry",
+        "another",
+        "answer",
+        "answered",
+        "any",
+        "anyone",
+        "anything",
+        "appear",
+        "appearance",
+        "appeared",
+        "applied",
+        "are",
+        "area",
+        "arm",
+        "arms",
+        "army",
+        "around",
+        "arrived",
+        "artery",
+        "articular",
+        "as",
+        "ask",
+        "asked",
+        "asking",
+        "associated",
+        "at",
+        "attack",
+        "attended",
+        "attention",
+        "away"
+    ],
+    "b": [
+        "back",
+        "bad",
+        "ball",
+        "battle",
+        "be",
+        "became",
+        "because",
+        "become",
+        "becomes",
+        "bed",
+        "been",
+        "before",
+        "began",
+        "beginning",
+        "behind",
+        "being",
+        "believe",
+        "beside",
+        "besides",
+        "best",
+        "better",
+        "between",
+        "beyond",
+        "black",
+        "blood",
+        "blue",
+        "body",
+        "bone",
+        "bones",
+        "book",
+        "both",
+        "bourienne",
+        "boy",
+        "bridge",
+        "bring",
+        "broken",
+        "brother",
+        "brought",
+        "business",
+        "but",
+        "by"
+    ],
+    "c": [
+        "call",
+        "called",
+        "came",
+        "camp",
+        "campaign",
+        "can",
+        "cancer",
+        "cannot",
+        "capital",
+        "captain",
+        "carriage",
+        "carried",
+        "case",
+        "cases",
+        "cause",
+        "causes",
+        "cells",
+        "certain",
+        "certainly",
+        "chair",
+        "change",
+        "changed",
+        "changes",
+        "chapter",
+        "character",
+        "chief",
+        "chiefly",
+        "child",
+        "children",
+        "chronic",
+        "church",
+        "city",
+        "civil",
+        "clear",
+        "clearly",
+        "clinical",
+        "clock",
+        "close",
+        "closed",
+        "coat",
+        "cold",
+        "colonel",
+        "colonial",
+        "colonies",
+        "come",
+        "coming",
+        "command",
+        "commander",
+        "commerce",
+        "common",
+        "company",
+        "complete",
+        "condition",
+        "conditions",
+        "congress",
+        "considerable",
+        "considered",
+        "consists",
+        "constitution",
+        "continued",
+        "contrary",
+        "control",
+        "convention",
+        "conversation",
+        "corner",
+        "could",
+        "count",
+        "countess",
+        "country",
+        "course",
+        "court",
+        "covered",
+        "cried",
+        "crowd",
+        "cry",
+        "cut"
+    ],
+    "d": [
+        "danger",
+        "dark",
+        "daughter",
+        "day",
+        "days",
+        "dead",
+        "dear",
+        "death",
+        "decided",
+        "declared",
+        "deep",
+        "described",
+        "destroyed",
+        "diagnosis",
+        "did",
+        "different",
+        "difficult",
+        "dinner",
+        "direct",
+        "direction",
+        "disease",
+        "diseases",
+        "distance",
+        "divided",
+        "do",
+        "doctor",
+        "does",
+        "doing",
+        "don",
+        "done",
+        "door",
+        "doubt",
+        "down",
+        "drawing",
+        "drawn",
+        "dress",
+        "dressing",
+        "drew",
+        "drove",
+        "dry",
+        "due",
+        "during",
+        "duty"
+    ],
+    "e": [
+        "each",
+        "early",
+        "earth",
+        "east",
+        "easy",
+        "economic",
+        "effect",
+        "effort",
+        "eight",
+        "either",
+        "election",
+        "else",
+        "emperor",
+        "employed",
+        "end",
+        "enemy",
+        "enough",
+        "entered",
+        "especially",
+        "established",
+        "even",
+        "evening",
+        "events",
+        "ever",
+        "every",
+        "everybody",
+        "everyone",
+        "everything",
+        "evidently",
+        "example",
+        "excellency",
+        "except",
+        "exclaimed",
+        "expected",
+        "explain",
+        "expressed",
+        "expression",
+        "eyes"
+    ],
+    "f": [
+        "face",
+        "faces",
+        "fact",
+        "fall",
+        "family",
+        "far",
+        "father",
+        "fear",
+        "features",
+        "federal",
+        "feel",
+        "feeling",
+        "feet",
+        "fell",
+        "fellow",
+        "felt",
+        "few",
+        "field",
+        "fig",
+        "filled",
+        "finally",
+        "find",
+        "fine",
+        "finger",
+        "fingers",
+        "fire",
+        "firm",
+        "first",
+        "five",
+        "fixed",
+        "follow",
+        "followed",
+        "following",
+        "foot",
+        "for",
+        "force",
+        "forces",
+        "foreign",
+        "form",
+        "formation",
+        "formed",
+        "former",
+        "forms",
+        "forward",
+        "found",
+        "four",
+        "france",
+        "free",
+        "freedom",
+        "french",
+        "frequently",
+        "fresh",
+        "friend",
+        "friends",
+        "frightened",
+        "from",
+        "front",
+        "full",
+        "further",
+        "future"
+    ],
+    "g": [
+        "gangrene",
+        "gave",
+        "general",
+        "generals",
+        "george",
+        "get",
+        "girl",
+        "give",
+        "given",
+        "giving",
+        "glad",
+        "glanced",
+        "glands",
+        "go",
+        "god",
+        "going",
+        "gold",
+        "gone",
+        "good",
+        "got",
+        "government",
+        "governor",
+        "great",
+        "greater",
+        "grew",
+        "ground",
+        "group",
+        "growing",
+        "growth"
+    ],
+    "h": [
+        "had",
+        "haemorrhage",
+        "hair",
+        "half",
+        "hand",
+        "hands",
+        "handsome",
+        "happened",
+        "happiness",
+        "happy",
+        "hard",
+        "hardly",
+        "has",
+        "have",
+        "having",
+        "he",
+        "head",
+        "health",
+        "hear",
+        "heard",
+        "heart",
+        "heavy",
+        "held",
+        "helene",
+        "help",
+        "her",
+        "here",
+        "herself",
+        "high",
+        "him",
+        "himself",
+        "his",
+        "historians",
+        "history",
+        "holding",
+        "home",
+        "honor",
+        "hope",
+        "horse",
+        "horses",
+        "hot",
+        "hour",
+        "hours",
+        "house",
+        "houses",
+        "how",
+        "however",
+        "human",
+        "hundred",
+        "husband"
+    ],
+    "i": [
+        "idea",
+        "if",
+        "ill",
+        "illustration",
+        "immediately",
+        "importance",
+        "important",
+        "impossible",
+        "in",
+        "increased",
+        "indeed",
+        "independence",
+        "individual",
+        "industry",
+        "infection",
+        "influence",
+        "injury",
+        "instead",
+        "interest",
+        "interests",
+        "into",
+        "is",
+        "it",
+        "its",
+        "itself"
+    ],
+    "j": [
+        "joint",
+        "joints",
+        "just"
+    ],
+    "k": [
+        "keep",
+        "kept",
+        "killed",
+        "kind",
+        "king",
+        "kissed",
+        "knee",
+        "knew",
+        "know",
+        "known"
+    ],
+    "l": [
+        "labor",
+        "lady",
+        "laid",
+        "land",
+        "large",
+        "last",
+        "late",
+        "later",
+        "latter",
+        "law",
+        "laws",
+        "lay",
+        "lead",
+        "leaders",
+        "least",
+        "leave",
+        "leaving",
+        "led",
+        "left",
+        "leg",
+        "legs",
+        "lesions",
+        "less",
+        "let",
+        "letter",
+        "liable",
+        "life",
+        "light",
+        "like",
+        "limb",
+        "line",
+        "lines",
+        "lips",
+        "listened",
+        "little",
+        "live",
+        "living",
+        "ll",
+        "local",
+        "long",
+        "longer",
+        "look",
+        "looked",
+        "looking",
+        "lord",
+        "loss",
+        "lost",
+        "love",
+        "loved",
+        "low",
+        "lower",
+        "lying",
+        "lymph"
+    ],
+    "m": [
+        "made",
+        "mademoiselle",
+        "majority",
+        "make",
+        "making",
+        "mamma",
+        "man",
+        "manner",
+        "many",
+        "march",
+        "marked",
+        "massachusetts",
+        "master",
+        "matter",
+        "matters",
+        "may",
+        "me",
+        "means",
+        "measures",
+        "meet",
+        "meeting",
+        "members",
+        "membrane",
+        "men",
+        "merely",
+        "met",
+        "method",
+        "middle",
+        "might",
+        "mikhaylovna",
+        "military",
+        "mind",
+        "minutes",
+        "moment",
+        "money",
+        "months",
+        "more",
+        "morning",
+        "most",
+        "mother",
+        "mouth",
+        "moved",
+        "movement",
+        "moving",
+        "much",
+        "muscle",
+        "muscles",
+        "must",
+        "my",
+        "myself"
+    ],
+    "n": [
+        "name",
+        "nation",
+        "national",
+        "natural",
+        "nature",
+        "near",
+        "nearly",
+        "necessary",
+        "neck",
+        "need",
+        "neither",
+        "nerve",
+        "nerves",
+        "never",
+        "new",
+        "news",
+        "next",
+        "night",
+        "no",
+        "nor",
+        "north",
+        "not",
+        "note",
+        "nothing",
+        "noticed",
+        "now",
+        "number"
+    ],
+    "o": [
+        "observed",
+        "occur",
+        "occurred",
+        "occurs",
+        "of",
+        "off",
+        "office",
+        "officer",
+        "officers",
+        "often",
+        "oh",
+        "old",
+        "on",
+        "once",
+        "one",
+        "only",
+        "open",
+        "opened",
+        "opening",
+        "operation",
+        "opinion",
+        "or",
+        "order",
+        "ordered",
+        "orders",
+        "organisms",
+        "other",
+        "others",
+        "our",
+        "out",
+        "over",
+        "own"
+    ],
+    "p": [
+        "pain",
+        "pale",
+        "paper",
+        "part",
+        "particularly",
+        "parts",
+        "party",
+        "pass",
+        "passed",
+        "passing",
+        "past",
+        "patient",
+        "pavlovna",
+        "pay",
+        "peace",
+        "peasants",
+        "people",
+        "perhaps",
+        "period",
+        "person",
+        "persons",
+        "place",
+        "placed",
+        "plan",
+        "please",
+        "pleasure",
+        "point",
+        "political",
+        "poor",
+        "popular",
+        "portion",
+        "position",
+        "possible",
+        "post",
+        "power",
+        "powers",
+        "prepared",
+        "presence",
+        "present",
+        "presented",
+        "president",
+        "pressed",
+        "pressure",
+        "prevent",
+        "primary",
+        "prisoners",
+        "probably",
+        "process",
+        "produce",
+        "produced",
+        "project",
+        "property",
+        "public",
+        "purpose",
+        "pus",
+        "put"
+    ],
+    "q": [
+        "question",
+        "questions",
+        "quickly",
+        "quiet",
+        "quite"
+    ],
+    "r": [
+        "raised",
+        "ran",
+        "rapidly",
+        "rather",
+        "re",
+        "reached",
+        "read",
+        "ready",
+        "really",
+        "reason",
+        "received",
+        "red",
+        "regiment",
+        "region",
+        "relation",
+        "relations",
+        "remain",
+        "remained",
+        "remarked",
+        "remember",
+        "remembered",
+        "removed",
+        "repeated",
+        "replied",
+        "reply",
+        "republican",
+        "republicans",
+        "rest",
+        "result",
+        "resulting",
+        "results",
+        "return",
+        "returned",
+        "revolution",
+        "right",
+        "rights",
+        "rise",
+        "road",
+        "rode",
+        "room",
+        "rose",
+        "rostopchin",
+        "rostovs",
+        "round",
+        "rule",
+        "run",
+        "running",
+        "russians"
+    ],
+    "s": [
+        "said",
+        "same",
+        "sarcoma",
+        "sat",
+        "saw",
+        "say",
+        "saying",
+        "says",
+        "seat",
+        "second",
+        "secondary",
+        "section",
+        "see",
+        "seeing",
+        "seem",
+        "seemed",
+        "seems",
+        "seen",
+        "self",
+        "sent",
+        "series",
+        "serious",
+        "service",
+        "set",
+        "seven",
+        "several",
+        "severe",
+        "shall",
+        "she",
+        "short",
+        "should",
+        "shoulders",
+        "shouted",
+        "show",
+        "showed",
+        "side",
+        "sides",
+        "sight",
+        "silence",
+        "silent",
+        "silver",
+        "similar",
+        "simple",
+        "since",
+        "single",
+        "sir",
+        "sister",
+        "sitting",
+        "six",
+        "size",
+        "skin",
+        "slavery",
+        "slowly",
+        "small",
+        "smile",
+        "smiled",
+        "smiling",
+        "smoke",
+        "so",
+        "society",
+        "soft",
+        "soldier",
+        "soldiers",
+        "some",
+        "someone",
+        "something",
+        "sometimes",
+        "son",
+        "soon",
+        "soul",
+        "sound",
+        "south",
+        "southern",
+        "speak",
+        "speaking",
+        "special",
+        "spirit",
+        "spite",
+        "spoke",
+        "spread",
+        "st",
+        "staff",
+        "standing",
+        "state",
+        "states",
+        "step",
+        "steps",
+        "still",
+        "stood",
+        "stopped",
+        "story",
+        "straight",
+        "strange",
+        "street",
+        "strength",
+        "strong",
+        "struck",
+        "study",
+        "subcutaneous",
+        "subject",
+        "such",
+        "suddenly",
+        "suppuration",
+        "sure",
+        "surface",
+        "swelling",
+        "symptoms",
+        "syphilis",
+        "syphilitic",
+        "system"
+    ],
+    "t": [
+        "table",
+        "take",
+        "taken",
+        "takes",
+        "taking",
+        "talk",
+        "talking",
+        "tariff",
+        "tears",
+        "tell",
+        "ten",
+        "tendon",
+        "term",
+        "terms",
+        "terrible",
+        "than",
+        "that",
+        "the",
+        "their",
+        "them",
+        "themselves",
+        "then",
+        "there",
+        "therefore",
+        "these",
+        "they",
+        "thin",
+        "thing",
+        "things",
+        "think",
+        "thinking",
+        "third",
+        "thirty",
+        "this",
+        "those",
+        "though",
+        "thought",
+        "thoughts",
+        "thousand",
+        "three",
+        "through",
+        "thus",
+        "till",
+        "time",
+        "times",
+        "tissue",
+        "tissues",
+        "tm",
+        "to",
+        "together",
+        "told",
+        "tone",
+        "too",
+        "took",
+        "toward",
+        "town",
+        "trade",
+        "treatment",
+        "tried",
+        "troops",
+        "true",
+        "trying",
+        "tuberculous",
+        "tumour",
+        "tumours",
+        "turn",
+        "turned",
+        "turning",
+        "twenty",
+        "two"
+    ],
+    "u": [
+        "ulcer",
+        "ulcers",
+        "unable",
+        "uncle",
+        "under",
+        "understand",
+        "understood",
+        "uniform",
+        "union",
+        "united",
+        "until",
+        "up",
+        "upon",
+        "upper",
+        "us",
+        "use",
+        "used",
+        "usual",
+        "usually"
+    ],
+    "v": [
+        "various",
+        "vein",
+        "veins",
+        "very",
+        "vessel",
+        "vessels",
+        "victory",
+        "view",
+        "village",
+        "voice",
+        "voices"
+    ],
+    "w": [
+        "wait",
+        "waiting",
+        "wall",
+        "want",
+        "wanted",
+        "war",
+        "was",
+        "washington",
+        "water",
+        "way",
+        "we",
+        "well",
+        "went",
+        "were",
+        "west",
+        "what",
+        "when",
+        "where",
+        "whether",
+        "which",
+        "while",
+        "white",
+        "who",
+        "whole",
+        "whom",
+        "whose",
+        "why",
+        "wife",
+        "will",
+        "window",
+        "wish",
+        "wished",
+        "with",
+        "within",
+        "without",
+        "woman",
+        "women",
+        "won",
+        "word",
+        "words",
+        "work",
+        "world",
+        "would",
+        "wound",
+        "wounded",
+        "wounds",
+        "wrote"
+    ],
+    "x": [
+        "xenial",
+        "xenon",
+        "xenophobia",
+        "xenophobic",
+        "xeric",
+        "xerophyte",
+        "xylem",
+        "xylitol",
+        "xylocarp",
+        "xylophone"
+    ],
+    "y": [
+        "year",
+        "years",
+        "yes",
+        "yet",
+        "you",
+        "young",
+        "your",
+        "yourself"
+    ],
+    "z": [
+        "zebra",
+        "zero",
+        "zinc",
+        "zip",
+        "zipper",
+        "zone",
+        "zoo",
+        "zoology",
+        "zoom",
+        "zucchini"
+    ]
+};
+    </script>
+</body>
+</html>
